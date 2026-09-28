@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Pixel Forge：瀏覽器裡的像素畫與動畫編輯器，零依賴、純靜態。">
+<title>Pixel Forge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%232f5fd0'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23fff'/%3E%3Crect x='9' y='9' width='4' height='4' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app" data-sheet="tools">
+
+  <header id="topbar">
+    <h1 class="brand">Pixel Forge</h1>
+    <input id="docName" type="text" maxlength="40" aria-label="專案名稱" spellcheck="false">
+    <button id="menuToggle" class="only-mobile" aria-expanded="false" aria-controls="menu">選單</button>
+    <nav id="menu" aria-label="檔案">
+      <button id="btnNew" title="新增專案">新增</button>
+      <button id="btnOpen" title="開啟 .pixelforge 檔 (Ctrl/Cmd+O)">開啟</button>
+      <button id="btnSave" title="存成 .pixelforge 檔 (Ctrl/Cmd+S)">存檔</button>
+      <button id="btnImport" title="把 PNG 匯入成新圖層">匯入圖片</button>
+      <button id="btnExport" title="匯出 PNG / Sprite sheet / GIF (Ctrl/Cmd+E)">匯出…</button>
+      <button id="btnHelp" title="快捷鍵一覽 (?)">快捷鍵</button>
+    </nav>
+    <div class="spacer"></div>
+    <button id="btnUndo" title="復原 (Ctrl/Cmd+Z)" aria-label="復原">復原</button>
+    <button id="btnRedo" title="重做 (Shift+Ctrl/Cmd+Z)" aria-label="重做">重做</button>
+    <span id="saveStatus" class="muted hide-mobile" role="status"></span>
+  </header>
+
+  <main id="workspace">
+    <aside id="toolsPanel" class="panel" data-panel="tools" aria-label="工具">
+      <h2>工具</h2>
+      <div id="toolGrid" role="toolbar" aria-label="繪圖工具">
+        <button data-tool="pencil" title="鉛筆 (B)"><span>鉛筆</span><kbd>B</kbd></button>
+        <button data-tool="eraser" title="橡皮擦 (E)"><span>橡皮擦</span><kbd>E</kbd></button>
+        <button data-tool="fill" title="油漆桶 (G)　Shift+點擊 = 全域同色"><span>油漆桶</span><kbd>G</kbd></button>
+        <button data-tool="line" title="直線 (L)　Shift = 水平/垂直/45°"><span>直線</span><kbd>L</kbd></button>
+        <button data-tool="rect" title="矩形 (R)　Shift = 正方形"><span>矩形</span><kbd>R</kbd></button>
+        <button data-tool="ellipse" title="橢圓 (O)　Shift = 正圓"><span>橢圓</span><kbd>O</kbd></button>
+        <button data-tool="select" title="矩形選取 (M)"><span>選取</span><kbd>M</kbd></button>
+        <button data-tool="picker" title="滴管 (I)　按住 Alt 暫時切換"><span>滴管</span><kbd>I</kbd></button>
+      </div>
+      <h2>選項</h2>
+      <div class="opts">
+        <label class="opt">筆刷大小 <output id="sizeOut">1</output>
+          <input id="optSize" type="range" min="1" max="8" value="1"></label>
+        <label class="opt">抖動
+          <select id="optDither">
+            <option value="0">關閉</option>
+            <option value="1">25%</option>
+            <option value="2">50%（棋盤）</option>
+            <option value="3">75%</option>
+          </select></label>
+        <div class="opt two">
+          <button id="optMirrorH" class="toggle" aria-pressed="false" title="水平鏡像 (H)">水平鏡像 <kbd>H</kbd></button>
+          <button id="optMirrorV" class="toggle" aria-pressed="false" title="垂直鏡像 (V)">垂直鏡像 <kbd>V</kbd></button>
+        </div>
+        <label class="opt">油漆桶範圍
+          <select id="optFill">
+            <option value="contig">連續同色</option>
+            <option value="global">全域同色</option>
+          </select></label>
+        <label class="opt">矩形 / 橢圓
+          <select id="optShape">
+            <option value="hollow">空心</option>
+            <option value="filled">實心</option>
+          </select></label>
+      </div>
+    </aside>
+
+    <section id="viewport" aria-label="畫布" tabindex="-1">
+      <div id="stage">
+        <canvas id="cvOnion"></canvas>
+        <canvas id="cvMain"></canvas>
+        <canvas id="cvPreview"></canvas>
+      </div>
+      <canvas id="cvOverlay"></canvas>
+      <div id="statusbar">
+        <span id="coords" class="mono">–</span>
+        <span id="sizeInfo" class="mono muted"></span>
+        <span class="spacer"></span>
+        <button id="zoomOut" aria-label="縮小" title="縮小 (-)">−</button>
+        <span id="zoomLabel" class="mono">100%</span>
+        <button id="zoomIn" aria-label="放大" title="放大 (+)">＋</button>
+        <button id="zoomFit" title="符合視窗 (0)">符合</button>
+        <button id="gridToggle" class="toggle" aria-pressed="true" title="格線 (#)">格線</button>
+      </div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </section>
+
+    <div id="side">
+      <section class="panel" data-panel="color" aria-label="色彩">
+        <h2>色彩</h2>
+        <div class="colorrow">
+          <div class="swatches">
+            <button id="bgSwatch" class="swatch bg" aria-label="背景色" title="背景色（右鍵點色盤可設定）"></button>
+            <button id="fgSwatch" class="swatch fg" aria-label="前景色" title="前景色"></button>
+          </div>
+          <div class="colorfields">
+            <label>HEX <input id="hexInput" type="text" maxlength="9" spellcheck="false" autocomplete="off"></label>
+            <div class="row">
+              <input id="colorPicker" type="color" aria-label="選色器">
+              <button id="btnSwap" title="交換前景/背景 (X)">交換 <kbd>X</kbd></button>
+            </div>
+          </div>
+        </div>
+        <label class="opt">色盤
+          <select id="paletteSelect"></select></label>
+        <div id="palette" role="group" aria-label="色盤"></div>
+        <div class="row">
+          <button id="palAdd" title="把前景色加進色盤">加入前景色</button>
+          <button id="palDel" title="刪除選取的色盤顏色">刪除所選</button>
+        </div>
+        <p id="paletteSource" class="note"></p>
+        <details>
+          <summary>從圖片建立色盤</summary>
+          <div class="row">
+            <label>顏色數 <input id="quantN" type="number" min="2" max="64" value="16"></label>
+            <button id="btnQuant">選擇圖片…</button>
+          </div>
+          <p class="note">用 median cut 演算法從圖片抽出代表色，取代目前的色盤。</p>
+        </details>
+        <div id="recent" role="group" aria-label="最近使用的顏色" title="最近使用的顏色"></div>
+      </section>
+
+      <section class="panel" data-panel="layers" aria-label="圖層">
+        <h2>圖層</h2>
+        <ul id="layerList" role="listbox" aria-label="圖層列表"></ul>
+        <div class="row wrap">
+          <button id="layAdd">新增</button>
+          <button id="layDup">複製</button>
+          <button id="layDel">刪除</button>
+          <button id="layUp" aria-label="上移" title="上移">↑</button>
+          <button id="layDown" aria-label="下移" title="下移">↓</button>
+          <button id="layMerge">合併向下</button>
+        </div>
+        <div class="props">
+          <label>名稱 <input id="layerName" type="text" maxlength="40" spellcheck="false"></label>
+          <label>不透明度 <output id="layerOpacityOut">100%</output>
+            <input id="layerOpacity" type="range" min="0" max="100" value="100"></label>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <section id="timeline" class="panel" data-panel="anim" aria-label="動畫時間軸">
+    <div class="tl-controls">
+      <button id="btnPlay" title="播放 / 暫停 (Enter)">播放</button>
+      <label>FPS <input id="fpsInput" type="number" min="1" max="60" value="10"></label>
+      <button id="frameAdd" title="在目前影格後新增空白影格">新增影格</button>
+      <button id="frameDup">複製影格</button>
+      <button id="frameDel">刪除影格</button>
+      <button id="frameLeft" aria-label="影格左移" title="左移">←</button>
+      <button id="frameRight" aria-label="影格右移" title="右移">→</button>
+      <span class="sep"></span>
+      <label class="check"><input id="onionOn" type="checkbox"> 洋蔥皮</label>
+      <label>前 <select id="onionBefore"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
+      <label>後 <select id="onionAfter"><option>0</option><option selected>1</option><option>2</option><option>3</option></select></label>
+      <label>透明度 <input id="onionAlpha" type="range" min="10" max="80" value="35"></label>
+    </div>
+    <div id="frames" role="listbox" aria-label="影格"></div>
+  </section>
+
+  <nav id="tabbar" class="only-mobile" aria-label="面板">
+    <button data-sheet="tools" aria-pressed="true">工具</button>
+    <button data-sheet="color" aria-pressed="false">色彩</button>
+    <button data-sheet="layers" aria-pressed="false">圖層</button>
+    <button data-sheet="anim" aria-pressed="false">動畫</button>
+  </nav>
+</div>
+
+<input id="fileOpen" type="file" accept=".pixelforge,.json,application/json" hidden>
+<input id="fileImport" type="file" accept="image/png,image/gif,image/jpeg,image/webp" hidden>
+<input id="fileQuant" type="file" accept="image/*" hidden>
+
+<dialog id="dlgNew">
+  <form method="dialog">
+    <h2>新增專案</h2>
+    <p class="note">目前的作品會被取代（自動存檔的內容也會被覆蓋）。需要的話請先存檔。</p>
+    <div class="grid2">
+      <label>寬度 (8–256) <input id="newW" type="number" min="8" max="256" value="32"></label>
+      <label>高度 (8–256) <input id="newH" type="number" min="8" max="256" value="32"></label>
+    </div>
+    <div class="row wrap" id="newPresets">
+      <button type="button" data-size="16">16×16</button>
+      <button type="button" data-size="32">32×32</button>
+      <button type="button" data-size="64">64×64</button>
+      <button type="button" data-size="128">128×128</button>
+    </div>
+    <menu>
+      <button value="cancel">取消</button>
+      <button id="newOk" value="ok" class="primary">建立</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="dlgExport">
+  <form method="dialog">
+    <h2>匯出</h2>
+    <fieldset>
+      <legend>PNG（目前影格）</legend>
+      <div class="row wrap">
+        <label>放大 <select id="pngScale"></select></label>
+        <button type="button" id="doPng" class="primary">下載 PNG</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Sprite sheet（所有影格）</legend>
+      <div class="row wrap">
+        <label>排列 <select id="sheetLayout"><option value="row">橫排</option><option value="grid">網格</option></select></label>
+        <label>欄數 <input id="sheetCols" type="number" min="1" max="64" value="4"></label>
+        <label>放大 <select id="sheetScale"></select></label>
+        <button type="button" id="doSheet" class="primary">下載 PNG + JSON</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>動畫 GIF</legend>
+      <div class="row wrap">
+        <label>放大 <select id="gifScale"></select></label>
+        <label class="check"><input id="gifLoop" type="checkbox" checked> 重複播放</label>
+        <button type="button" id="doGif" class="primary">產生並下載</button>
+      </div>
+      <p id="gifInfo" class="note"></p>
+      <div id="gifPreviewBox"></div>
+    </fieldset>
+    <menu><button value="close">關閉</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlgHelp">
+  <form method="dialog">
+    <h2>快捷鍵</h2>
+    <table class="keys">
+      <tbody>
+        <tr><th>B / E / G</th><td>鉛筆 / 橡皮擦 / 油漆桶（Shift+點擊 = 全域同色）</td></tr>
+        <tr><th>L / R / O</th><td>直線 / 矩形 / 橢圓（Shift 限制角度或比例）</td></tr>
+        <tr><th>M</th><td>選取；拖曳選取框內可移動；Ctrl/Cmd+C、X、V 複製、剪下、貼上；Delete 清除</td></tr>
+        <tr><th>I 或 Alt</th><td>滴管（Alt 為暫時切換；右鍵取到背景色）</td></tr>
+        <tr><th>H / V</th><td>水平 / 垂直鏡像繪圖</td></tr>
+        <tr><th>[ ]</th><td>縮小 / 放大筆刷</td></tr>
+        <tr><th>X</th><td>交換前景與背景色</td></tr>
+        <tr><th>空白鍵 + 拖曳</th><td>平移畫布（中鍵、雙指也可以）</td></tr>
+        <tr><th>滾輪 / 雙指</th><td>縮放畫布</td></tr>
+        <tr><th>+ − 0</th><td>放大 / 縮小 / 符合視窗</td></tr>
+        <tr><th>#</th><td>顯示或隱藏格線</td></tr>
+        <tr><th>, .</th><td>上一格 / 下一格</td></tr>
+        <tr><th>Enter</th><td>播放 / 暫停</td></tr>
+        <tr><th>Ctrl/Cmd+Z</th><td>復原（Shift+Ctrl/Cmd+Z 或 Ctrl+Y 重做）</td></tr>
+        <tr><th>Ctrl/Cmd+S / O / E</th><td>存檔 / 開啟 / 匯出</td></tr>
+        <tr><th>Ctrl/Cmd+A</th><td>選取整張畫布</td></tr>
+        <tr><th>Esc</th><td>取消選取</td></tr>
+      </tbody>
+    </table>
+    <menu><button value="close">關閉</button></menu>
+  </form>
+</dialog>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
